@@ -2,29 +2,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 import os
+from sympy import symbols, diff, lambdify, sympify
 
-# Função para definir a função e sua derivada
+# Definir a função de entrada segura
 def define_function():
-    print("Digite a função f(x) usando a sintaxe do Python (use 'x' como variável):")
-    print("Exemplo: x**3 + 2*x**2 - 5*x + 7")
-    f_expr = input("f(x) = ")
-    f = lambda x: eval(f_expr)
+    x = symbols('x')
     
-    print("\nDigite a derivada f'(x) usando a sintaxe do Python:")
-    print("Exemplo: 3*x**2 + 4*x - 5")
-    df_expr = input("f'(x) = ")
-    df = lambda x: eval(df_expr)
+    while True:
+        try:
+            f_expr = sympify(input("Digite a função f(x): "))
+            df_expr = diff(f_expr, x)
+            f = lambdify(x, f_expr, 'numpy')
+            df = lambdify(x, df_expr, 'numpy')
+            print(f"Derivada calculada automaticamente: f'(x) = {df_expr}")
+            return f, df, x
+        except Exception as e:
+            print(f"Erro na entrada: {e}. Certifique-se de usar a sintaxe correta (ex: 'exp(x)', 'log(x)', 'sin(x)', etc.). Tente novamente.")
+
+# Encontrar pontos críticos automaticamente
+def find_critical_points(df, x_min, x_max):
+    x_values = np.linspace(x_min, x_max, 1000)
     
-    return f, df
+    # Verifica se df é uma função numérica
+    if not callable(df):
+        raise TypeError("A derivada 'df' não é uma função numérica.")
+    
+    df_values = df(x_values)  # Avalia a derivada nos pontos x_values
+    
+    # Encontrar onde a derivada muda de sinal
+    critical_points = []
+    for i in range(len(x_values) - 1):
+        if df_values[i] * df_values[i + 1] < 0:
+            root = fsolve(df, (x_values[i] + x_values[i + 1]) / 2)  # Chute inicial no meio do intervalo
+            critical_points.append(root[0])
+    
+    # Remover duplicatas e arredondar
+    critical_points = np.unique(np.round(critical_points, decimals=5))
+    return critical_points
 
-# Função para encontrar pontos críticos
-def find_critical_points(df):
-    print("\nDigite os chutes iniciais para encontrar os pontos críticos (separados por espaço):")
-    print("Exemplo: -3 0 3")
-    guesses = list(map(float, input().split()))
-    return fsolve(df, guesses)
-
-# Função para plotar a função e sua derivada
+# Função para plotar gráficos
 def plot_function_and_derivative(ax, x, f, df, critical_points, plot_derivative=True):
     y = f(x)
     dy = df(x)
@@ -36,67 +52,41 @@ def plot_function_and_derivative(ax, x, f, df, critical_points, plot_derivative=
     if plot_derivative:
         ax.plot(x, dy, label=r"$f'(x)$", color='red', linestyle='dashed')
     
-    # Marcar pontos críticos
     for cp in critical_points:
-        if min(x) <= cp <= max(x):  # Apenas se estiver no intervalo
+        if min(x) <= cp <= max(x):
             ax.scatter(cp, f(cp), color='green', zorder=3, label=f'Crítico ({cp:.2f}, {f(cp):.2f})')
-
-# Função para plotar a reta tangente
-def plot_tangent_line(ax, x0, f, df):
-    y0 = f(x0)
-    dy0 = df(x0)
-    tangent_x = np.linspace(x0 - 1, x0 + 1, 100)
-    tangent_y = dy0 * (tangent_x - x0) + y0
-    ax.plot(tangent_x, tangent_y, color='purple', linestyle='dotted', label=f'Tangente em x0={x0}')
-    ax.scatter(x0, y0, color='blue', zorder=3)
-    ax.text(x0, y0, f'  f({x0})', fontsize=12, verticalalignment='bottom', color='blue')
 
 # Função principal
 def main():
-    print("Bem-vindo ao Gerador de Gráficos de Funções e Derivadas!")
-    print("Este programa pode ser usado para análise matemática em diversas áreas.\n")
+    print("Bem-vindo ao Gerador de Gráficos de Funções e Derivadas!\n")
     
-    # Definir a função e sua derivada
-    f, df = define_function()
+    f, df, x_sym = define_function()
     
-    # Encontrar pontos críticos
-    critical_points = find_critical_points(df)
+    while True:
+        try:
+            x_min = float(input("\nDigite o valor mínimo de x: "))
+            x_max = float(input("Digite o valor máximo de x: "))
+            if x_min < x_max:
+                break
+            print("x_min deve ser menor que x_max. Tente novamente.")
+        except ValueError:
+            print("Entrada inválida. Tente novamente.")
+    
+    critical_points = find_critical_points(df, x_min, x_max)
     print("\nPontos críticos encontrados:", critical_points)
     
-    # Criar intervalo de valores de x
-    x_min = float(input("\nDigite o valor mínimo de x: "))
-    x_max = float(input("Digite o valor máximo de x: "))
     x = np.linspace(x_min, x_max, 400)
     
-    # Criar o gráfico
     fig, ax = plt.subplots(figsize=(8, 6))
-    
-    # Escolher o que plotar
     plot_derivative = input("\nDeseja plotar a derivada? (s/n): ").strip().lower() == 's'
-    plot_tangent = input("Deseja plotar a reta tangente? (s/n): ").strip().lower() == 's'
-    
     plot_function_and_derivative(ax, x, f, df, critical_points, plot_derivative)
     
-    if plot_tangent:
-        while True:
-            try:
-                x0 = float(input("\nDigite um valor para x0 (entre {} e {}): ".format(x_min, x_max)))
-                if x_min <= x0 <= x_max:
-                    break
-                else:
-                    print("Valor fora do intervalo. Tente novamente.")
-            except ValueError:
-                print("Entrada inválida. Tente novamente.")
-        plot_tangent_line(ax, x0, f, df)
-    
-    # Configurações finais do gráfico
     ax.legend()
     ax.grid()
     ax.set_title('Função e sua Derivada')
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     
-    # Exportação do gráfico
     save_option = input("\nDeseja salvar o gráfico? (png/pdf/não): ").strip().lower()
     if save_option in ['png', 'pdf']:
         directory = input("Digite o diretório onde deseja salvar o gráfico (deixe em branco para o diretório atual): ").strip()
